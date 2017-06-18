@@ -3,7 +3,8 @@ from dialog import *
 from multiprocessing import Process
 from threading import Thread
 import Proc
-import zmq
+#import zmq
+import socket
 import os
 from tkFileDialog import *
 from NET import *
@@ -31,17 +32,20 @@ class APP:
 		self.startedProc = [0] *self.MaxSimpleMul
 		for i in xrange(self.MaxSimpleMul) :
 			self.startedProc[i] = []
-		context = zmq.Context()
-		self.socket = context.socket(zmq.SUB)
-		self.socket.bind("tcp://127.0.0.1:5410")
-		self.socket.setsockopt(zmq.SUBSCRIBE, '')
-		self.socket.RCVTIMEO = 25
+		self.socket = socket.socket()
+		self.socket.bind(("", 8010))
+		self.socket.listen(self.MaxSimpleMul)
 		self.Exit = False
 		#self.learningrate = 0.1
-		threads = [0]*self.MaxSimpleMul
+		self.threads = [0]*self.MaxSimpleMul
 		for i in xrange(self.MaxSimpleMul):
-			threads[i] = Thread(target=self.Twork, args=(i, os.getcwd()+"/%s"%i))
-			threads[i].start()
+			self.threads[i] = Thread(target=self.Twork, args=(i, os.getcwd()+"/%s"%i))
+			self.threads[i].daemon = True
+			self.threads[i].start()
+		self.root.protocol('WM_DELETE_WINDOW', self.Quit)
+		self.Tsoket = Thread(target=self.UpdateMainProcNN)
+		self.Tsoket.daemon = True
+		self.Tsoket.start()
 		self.root.mainloop()
 
 	def PrepareFS(self):
@@ -67,20 +71,20 @@ class APP:
 		Label(self.SummuryInfo, text= "Iteration").grid( row=0, column=1)
 		Label(self.SummuryInfo, text= "Error").grid( row=0, column=2)
 		Label(self.SummuryInfo, text= "Mean Errors").grid( row=0, column=3)
-		TextStructure = [0]*self.MaxSimpleMul
-		TextIterations = [0]*self.MaxSimpleMul
-		TextError = [0]*self.MaxSimpleMul
-		TextMean = [0]*self.MaxSimpleMul
+		self.TextStructure = [0]*self.MaxSimpleMul
+		self.TextIterations = [0]*self.MaxSimpleMul
+		self.TextError = [0]*self.MaxSimpleMul
+		self.TextMean = [0]*self.MaxSimpleMul
 		for i in xrange(self.MaxSimpleMul):
-			TextStructure[i] = StringVar()
-			TextIterations[i] = StringVar()
-			TextError[i] = StringVar()
-			TextMean[i] = StringVar()
+			self.TextStructure[i] = StringVar()
+			self.TextIterations[i] = StringVar()
+			self.TextError[i] = StringVar()
+			self.TextMean[i] = StringVar()
 		for j in xrange(self.MaxSimpleMul):
-			Label(self.SummuryInfo, textvariable = TextStructure[j]).grid(row=j+1, column=0)
-			Label(self.SummuryInfo, textvariable = TextIterations[j]).grid(row=j+1, column=1)
-			Label(self.SummuryInfo, textvariable = TextError[j]).grid(row=j+1, column=2)
-			Label(self.SummuryInfo, textvariable = TextMean[j]).grid(row=j+1, column=3)
+			Label(self.SummuryInfo, textvariable = self.TextStructure[j]).grid(row=j+1, column=0)
+			Label(self.SummuryInfo, textvariable = self.TextIterations[j]).grid(row=j+1, column=1)
+			Label(self.SummuryInfo, textvariable = self.TextError[j]).grid(row=j+1, column=2)
+			Label(self.SummuryInfo, textvariable = self.TextMean[j]).grid(row=j+1, column=3)
 		self.SummuryInfo.grid()
 		
 			
@@ -99,18 +103,19 @@ class APP:
 			self.dMSE = [0]*self.MaxSimpleMul
 			for i in xrange(self.MaxSimpleMul):
 				#threads[i] = Thread(target=self.Twork, args=(i, os.getcwd()+"/%s"%i))
-				self.Mainproc[i] = Process(target=Proc.main, args = (arg, os.getcwd()+"/%s"%i, i, "main"))
+				self.Mainproc[i] = Process(target=Proc.main, args = (arg, os.getcwd()+"/%s"%i, "main", i))
 				self.dMSE[i] = []
 			for i in xrange(self.MaxSimpleMul):
 				#threads[i].start()
 				self.Mainproc[i].start()
+			
 		if iter != None:
 			self.dMSE[iter] = []
 			arg =[]
 			arg += [10/self.MaxSimpleMul]																			############
 			arg +=x
 			arg += [10/self.MaxSimpleMul]																			###########
-			self.Mainproc[iter] = Process(target=Proc.main, args = (arg, os.getcwd()+"/%s"%iter, "main"))
+			self.Mainproc[iter] = Process(target=Proc.main, args = (arg, os.getcwd()+"/%s"%iter, "main", iter))
 			self.Mainproc[iter].start()
 
 		
@@ -154,26 +159,20 @@ class APP:
 				self.root.update()
 			except: pass
 		
-	def UpdateMainProcNN(self, iter):
-		if self.StartButtonName.get() != "Start Network":
-			try:
-				msg = self.socket.recv()
-				#print msg
-				m = msg.split(" ")
-				if m[0] == 'main':
-					#print 
-					TextStructure[iter].set("%s",m[2])
-					TextIterations[iter].set("%s",m[3])
-					TextError[iter].set("%s",m[1])
-					TextMean[iter].set("%s",m[5])
-					"""self.MainProcText.set("%s\n%s"%(m[2], m[1]))
-					self.PorogText.set("Structure Hiden layer of NN: %s"%m[4])
-					self.IterationText.set("Iteration i = %s"%m[3])
-					self.MeanError.set("Mean of Errors = %s"%m[5])
-					self.RealErrorText.set("Real Error = %s"%m[6])
-					self.dMSE.append(float(m[1]))"""
-			except: pass
-		self.root.update()
+	def UpdateMainProcNN(self):
+		while self.Exit == False:
+			self.conn, _ = self.socket.accept()
+			msg = self.conn.recv(1024)
+			print msg
+			m = msg.split(" ")
+			if m[0] == 'main':
+				self.TextStructure[int(m[2])].set("%s"%m[7:])
+				self.TextIterations[int(m[2])].set("%s"%m[3])
+				self.TextError[int(m[2])].set("%s"%m[1])
+				self.TextMean[int(m[2])].set("%s"%m[5])
+			self.root.update()
+			self.conn.close()
+		
 
 	#def MainLoop(self):
 		
@@ -209,11 +208,8 @@ class APP:
 					#print iter, dirlist
 					l = []
 					for i in dirlist:
-						if os.path.isfile(i):
-							#print iter,  i[-3:], "ISFILE"
-							if i[-3:] == "xml":
-								print iter,  i, "ISFILE"
-								l.append(os.path.basename(i))
+						if i[-4:]== ".xml":							
+							l.append(os.path.basename(i))
 					print iter, l, "L"
 					l1=[]
 					for i in xrange(len(l)):
@@ -222,7 +218,7 @@ class APP:
 						l1[i][0] = float(l1[i][0])
 					d = dict(l1[:])
 					l2 = d.keys()
-					l2 = np.sort(np.array(l2,dtype = "float"))
+					l2 = np.sort(np.array(l2,dtype = "float64"))
 					print l2
 					if l2[0]<0.000000000000001:
 						self.Exit = True
@@ -243,7 +239,6 @@ class APP:
 						dirlist = os.listdir(path)
 						l = []
 						for i in dirlist:
-							if os.path.isfile(i):
 								if i[-3:] == "upd":
 									l.append(os.path.basename(i))
 						l1=[]
@@ -253,17 +248,17 @@ class APP:
 							l1[i][0] = float(l1[i][0])
 						d = dict(l1[:])
 						l2 = d.keys()
-						l2 = np.sort(np.array(l2,dtype = "float"))
+						l2 = np.sort(np.array(l2,dtype = "float64"))
 						
 						self.StartNN(d[l2[0]].split("_")[1])
 						self.root.title("MAin 52x52 BackProp %s"%d[l2[0]].split("_")[1])
 						self.startedProc[iter] = []
-						DellFiles(path, "xml")
-						DellFiles(path, "upd", True)
-						DellFiles(path, "work")
+						self.DellFiles(path, "xml")
+						self.DellFiles(path, "upd", True)
+						self.DellFiles(path, "work")
 			#self.UpdateButtons()
-			self.root.update()
-			self.UpdateMainProcNN(iter)
+			#self.root.update()
+			#self.UpdateMainProcNN(iter)
 
 	def AddProc(self, iter, alter):
 		self.startedProc[iter] = []
@@ -272,7 +267,7 @@ class APP:
 			arg+=[10/self.MaxSimpleMul]																														#############
 			arg+=alter[i]
 			arg+=[10/self.MaxSimpleMul]																														#############
-			self.startedProc[iter].append(Process(target=Proc.main, args=(arg, os.getcwd()+"/%s"%iter, i, i)))
+			self.startedProc[iter].append(Process(target=Proc.main, args=(arg, os.getcwd()+"/%s"%iter, i, iter, i)))
 		for i in  self.startedProc[iter]:
 			print iter, i
 			i.start()
@@ -313,6 +308,14 @@ class APP:
 				self.startedProc[iter][i].terminate()
 				event.widget.destroy()
 				break
+				
+	def Quit(self):
+		self.Exit = True
+		
+		for i in xrange(self.MaxSimpleMul):
+			self.threads[i].join()
+			self.Mainproc[i].join()
+		sys.exit()
 			
 if __name__ == "__main__":
 	a = APP()

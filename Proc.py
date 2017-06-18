@@ -2,14 +2,14 @@ import sys
 from NET import *
 from other import *
 import os
-import zmq
+import socket
 import numpy as np
 
 ITERATIONS = 1000000
 
 Net = None
 
-def main(arg, path, iter, update = None):
+def main(arg, path, Type, iter, update = None):
 	global lendata, data
 	lendata = 0
 	ITERATIONS = 1000000
@@ -20,37 +20,35 @@ def main(arg, path, iter, update = None):
 		dirlist = os.listdir(path)
 		l = []
 		for i in dirlist:
-			if os.path.isfile(i):
-				if i[-4:] == "upd":
-					l.append(os.path.basename(i))
+			if i[-3:] == "upd":
+				l.append(os.path.basename(i))
 		if len (l)>0:
 			l1 = []
 			for i in xrange(len(l)):
-				l1.append(l[i][:-5].split("  "))
+				l1.append(l[i][:-4].split("  "))
 			d = dict(l1[:])
 			l2 = d.keys()
-			l2 = np.sort(np.array(l2, dtype = "float"))
+			l2 = np.sort(np.array(l2, dtype = "float64"))
 			for i in l:
-				if i.find(l2[0]) != -1:
-					if d[l2[0]] == "%s_%s_%s"%(argv[0],x ,argv[1]):
+				if i.find("%s"%l2[0]) != -1:
+					if d["%s"%l2[0]] == "%s_%s_%s"%(arg[0],arg[1:-1] ,arg[-1]):
 						f2 = i
 					break
 		dirlist = os.listdir(path)
 		l = []
 		for i in dirlist:
-			if os.path.isfile(i):
-				if i[-4:] == "xml":
-					l.append(os.path.basename(i))
+			if i[-3:] == "xml":
+				l.append(os.path.basename(i))
 		if len (l)>0:
 			l1 = []
 			for i in xrange(len(l)):
-				l1.append(l[i][:-5].split("  "))
+				l1.append(l[i][:-4].split("  "))
 			d = dict(l1[:])
 			l2 = d.keys()
-			l2 = np.sort(np.array(l2, dtype = "float"))
+			l2 = np.sort(np.array(l2, dtype = "float64"))
 			for i in l:
-				if i.find(l2[0]) != -1:
-					Net.UpdateWeights(i, f2)
+				if i.find("%s"%l2[0]) != -1:
+					Net.UpdateWeights(path+"/"+i, path+"/"+f2)
 					break
 	if update != None:
 		ITERATIONS = 0
@@ -70,19 +68,14 @@ def main(arg, path, iter, update = None):
 				l1.append(l[i][:-5].split("  "))
 			d = dict(l1[:])
 			l2 = d.keys()
-			l2 = np.sort(np.array(l2, dtype = "float"))
+			l2 = np.sort(np.array(l2, dtype = "float64"))
 			for i in l:
-				if i.find(l2[0]) != -1:
-					Net.UpdateWeights(i)
+				if i.find("%s"%l2[0]) != -1:
+					Net.UpdateWeights(path+"/"+i)
 					break
 	ReloadData(Net, path)
-	context = zmq.Context()
-	#socket_r = context.socket(zmq.SUB)
-	#socket_r.bind("tcp://127.0.0.1:5645")
-	#socket_r.setsockopt(zmq.SUBSCRIBE, '')
-	#socket_r.RCVTIMEO = 250
-	socket = context.socket(zmq.PUB)
-	socket.connect("tcp://127.0.0.1:5410")
+	sock = socket.socket()
+	sock.connect(("localhost", 8010))
 	lastfname = ""
 	old_err  = 0
 	count = 0
@@ -107,11 +100,15 @@ def main(arg, path, iter, update = None):
 			old_err = err
 		if i >1:
 			if np.abs(SpeedLearning(err_count, i+1)) <= np.abs(err):
-				msg = "%s %s %s %s %s %s %s"%(iter, err, arg, i, count, SpeedLearning(err_count, i+1), check_error(data, Net))
-				socket.send(msg)
+				msg = "%s %s %s %s %s %s %s %s"%(Type, err, iter, i, count, SpeedLearning(err_count, i+1), check_error(data, Net), arg)
+				try:
+					sock.send(msg)
+				except: pass
 				break
-		msg = "%s %s %s %s %s %s %s"%(iter, err, arg, i, count, SpeedLearning(err_count, i+1), check_error(data, Net))
-		socket.send(msg)
+		msg = "%s %s %s %s %s %s %s %s"%(Type, err, iter, i, count, SpeedLearning(err_count, i+1), check_error(data, Net), arg)
+		try:
+			sock.send(msg)
+		except: pass
 		if i < len(l):
 				if l[i]<err:
 					count  = count_max
@@ -126,8 +123,10 @@ def main(arg, path, iter, update = None):
 			else: count = 0
 		if count >= count_max:
 			err = old_err
-			msg = "%s %s %s %s %s %s %s"%(iter, err, arg, i, count, SpeedLearning(err_count, i+1), check_error(data, Net))
-			socket.send(msg)
+			msg = "%s %s %s %s %s %s %s %s"%(Type, err, iter, i, count, SpeedLearning(err_count, i+1), check_error(data, Net), arg)
+			try:
+				sock.send(msg)
+			except: pass
 			break
 		if i%(ITERATIONS/100) == 0:
 			ReloadData(Net, path)
@@ -137,8 +136,10 @@ def main(arg, path, iter, update = None):
 			else: fnamecmp = 0
 			if fnamecmp>=2:
 				
-				msg = "%s %s %s %s %s %s %s"%(iter, err, arg, i, count, SpeedLearning(err_count, i+1), check_error(data, Net))
-				socket.send(msg)
+				msg = "%s %s %s %s %s %s %s %s"%(Type, err, iter, i, count, SpeedLearning(err_count, i+1), check_error(data, Net), arg)
+				try:
+					sock.send(msg)
+				except: pass
 				break
 			lastfname = fname
 			Net.SaveNet(path+"/"+fname)
@@ -147,8 +148,9 @@ def main(arg, path, iter, update = None):
 		fname = '%s  %s_%s_%s.upd'%(Net.err, Net.inputsize, Net.hiden, Net.outputsize)
 		Net.SaveNet(path+"/"+fname)
 	else:
-		Net.SaveNet()
+		Net.SaveNet(path+'/%s  %s_%s_%s.xml'%(Net.err, Net.inputsize, Net.hiden, Net.outputsize))
 	print ("end %s        %s"%(arg, err))
+	sock.close()
 	sys.exit()
 
 def ReloadData(Net, path):
