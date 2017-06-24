@@ -3,6 +3,7 @@ from dialog import *
 from multiprocessing import Process
 from threading import Thread
 import Proc
+import time
 #import zmq
 import socket
 import os
@@ -38,6 +39,7 @@ class APP:
 		self.Exit = False
 		#self.learningrate = 0.1
 		self.threads = [0]*self.MaxSimpleMul
+		self.learningrate = [0.01]*self.MaxSimpleMul
 		for i in xrange(self.MaxSimpleMul):
 			self.threads[i] = Thread(target=self.Twork, args=(i, os.getcwd()+"/%s"%i))
 			self.threads[i].daemon = True
@@ -106,7 +108,7 @@ class APP:
 			self.dMSE = [0]*self.MaxSimpleMul
 			for i in xrange(self.MaxSimpleMul):
 				#threads[i] = Thread(target=self.Twork, args=(i, os.getcwd()+"/%s"%i))
-				self.Mainproc[i] = Process(target=Proc.main, args = (arg, os.getcwd()+"/%s"%i, "main", i))
+				self.Mainproc[i] = Process(target=Proc.main, args = (arg, os.getcwd()+"/%s"%i, "main", i, 0.1))
 				self.dMSE[i] = []
 			for i in xrange(self.MaxSimpleMul):
 				#threads[i].start()
@@ -118,7 +120,7 @@ class APP:
 			arg += [10/self.MaxSimpleMul]																			############
 			arg +=x
 			arg += [10/self.MaxSimpleMul]																			###########
-			self.Mainproc[iter] = Process(target=Proc.main, args = (arg, os.getcwd()+"/%s"%iter, "main", iter))
+			self.Mainproc[iter] = Process(target=Proc.main, args = (arg, os.getcwd()+"/%s"%iter, "main", iter, self.learningrate[iter]))
 			self.Mainproc[iter].start()
 
 		
@@ -216,8 +218,9 @@ class APP:
 					#print iter, dirlist
 					l = []
 					for i in dirlist:
+						#print i
 						if i[-4:]== ".xml":							
-							l.append(os.path.basename(i))
+							l.append(i)
 					#print iter, l, "L"
 					l1=[]
 					for i in xrange(len(l)):
@@ -249,8 +252,8 @@ class APP:
 						dirlist = os.listdir(path)
 						l = []
 						for i in dirlist:
-								if i[-3:] == "upd":
-									l.append(os.path.basename(i))
+								if i[-4:] == ".upd":
+									l.append(i)
 						l1=[]
 						for i in xrange(len(l)):
 							l1.append(l[i][:-4].split("  "))
@@ -259,6 +262,7 @@ class APP:
 						d = dict(l1[:])
 						l2 = d.keys()
 						l2 = np.sort(np.array(l2,dtype = "float64"))
+						print d[l2[0]].split("_")
 						arg = self.ParamFromText(d[l2[0]].split("_")[1])
 						self.StartNN(arg, iter)
 						#self.root.title("MAin 52x52 BackProp %s"%d[l2[0]].split("_")[1])

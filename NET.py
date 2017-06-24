@@ -80,14 +80,14 @@ class NET():
 					print (conn.whichBuffers(cc), conn.params[cc])
 		print ("END")
 
-	def AddData(self, datainput, dataoutput):
+	def AddData(self, datainput, dataoutput, learningrate):
 		if len(dataoutput) != len(datainput):
 			print ("Not equals data", len(dataoutput), len(datainput))
 			return 1
 		self.ds = SupervisedDataSet(self.inputsize, self.outputsize)
 		for i in xrange(len(dataoutput)):
 			self.ds.appendLinked(datainput[i], dataoutput[i])
-		self.trainer = BackpropTrainer(self.net, dataset = self.ds, learningrate = 0.1)
+		self.trainer = BackpropTrainer(self.net, dataset = self.ds, learningrate = learningrate)
 		return 0
 	
  

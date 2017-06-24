@@ -81,7 +81,7 @@ def main(arg, path, Type, iter, learningrate, update = None):
 					break
 	ReloadData(Net, path, learningrate)
 	sock = socket.socket()
-	sock.connect(("localhost", 50007))
+	sock.connect(("localhost", 8011))
 	lastfname = ""
 	old_err  = 0
 	count = 0
@@ -152,7 +152,7 @@ def main(arg, path, Type, iter, learningrate, update = None):
 	#sock.close()
 	sys.exit()
 
-def ReloadData(Net, path):
+def ReloadData(Net, path, learningrate):
 	global lendata, data
 	print ("Begin loading data")
 	fr = open(path+"/data.len", "r")
@@ -167,7 +167,7 @@ def ReloadData(Net, path):
 	data = res[:]
 	if lendata != len(res) or lendata == 0:
 		Net.ds.clear()		
-		r = Net.AddData(res[:-1], res[1:])
+		r = Net.AddData(res[:-1], res[1:], learningrate)
 	lendata = len(res)
 	print ("End loading data")
 	
