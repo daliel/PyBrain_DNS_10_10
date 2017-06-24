@@ -1,6 +1,6 @@
 from Tkinter import *
 from dialog import *
-from multiprocessing import Process
+from multiprocessing import Process, Value, Array
 from threading import Thread
 import Proc
 import time
@@ -40,14 +40,16 @@ class APP:
 		#self.learningrate = 0.1
 		self.threads = [0]*self.MaxSimpleMul
 		self.learningrate = [0.01]*self.MaxSimpleMul
+		
+		b=[]
+		for i in xrange(7):
+			b.append(Value("d", 1.))
+		self.sharedmemory = [b]* self.MaxSimpleMul
 		for i in xrange(self.MaxSimpleMul):
 			self.threads[i] = Thread(target=self.Twork, args=(i, os.getcwd()+"/%s"%i))
 			self.threads[i].daemon = True
 			self.threads[i].start()
 		self.root.protocol('WM_DELETE_WINDOW', self.Quit)
-		self.Tsoket = Thread(target=self.UpdateMainProcNN)
-		self.Tsoket.daemon = True
-		self.Tsoket.start()
 		self.root.mainloop()
 
 	def PrepareFS(self):
@@ -120,7 +122,7 @@ class APP:
 			arg += [10/self.MaxSimpleMul]																			############
 			arg +=x
 			arg += [10/self.MaxSimpleMul]																			###########
-			self.Mainproc[iter] = Process(target=Proc.main, args = (arg, os.getcwd()+"/%s"%iter, "main", iter, self.learningrate[iter]))
+			self.Mainproc[iter] = Process(target=Proc.main, args = (arg, os.getcwd()+"/%s"%iter, "main", iter, self.learningrate[iter], None, self.sharedmemory))
 			self.Mainproc[iter].start()
 
 		
@@ -164,21 +166,12 @@ class APP:
 				self.root.update()
 			except: pass
 		
-	def UpdateMainProcNN(self):
-		while self.Exit == False:
-			self.conn, _ = self.socket.accept()
-			time.sleep(10)
-			msg = self.conn.recv(1024)
-			if msg != "":
-				print msg
-			m = msg.split("  ")
-			if m[0] == 'main':
-				self.TextStructure[int(m[2])].set("%s"%m[7])
-				self.TextIterations[int(m[2])].set("%s"%m[3])
-				self.TextError[int(m[2])].set("%s"%m[1])
-				self.TextMean[int(m[2])].set("%s"%m[5])
-			#self.root.update()
-		self.conn.close()
+	def UpdateMainProcNN(self, iter):
+		#self.TextStructure[int(m[2])].set("%s"%m[7])
+		self.TextIterations[iter].set("%s"%self.sharedmemory[iter][3].value)
+		self.TextError[iter].set("%s"%self.sharedmemory[iter][1].value)
+		self.TextMean[iter].set("%s"%self.sharedmemory[iter][5].value)
+		
 		
 
 	#def MainLoop(self):
@@ -238,7 +231,9 @@ class APP:
 					fw.write("%s"%self.dMSE[iter][:-1])
 					fw.close()
 					self.dMSE[iter] = []
-					self.learningrate[iter] = float("{0:.9f}".format(float(l2[0])/10))
+					learningrate = float("{0:.9f}".format(float(l2[0])/10))
+					if self.learningrate[iter] > learningrate:
+						self.learningrate[iter] = learningrate
 					param = self.ParamFromText(d[l2[0]].split("_")[1])
 					alter = self.Alternate(param)
 					self.AddProc(iter, alter[:])
@@ -265,12 +260,17 @@ class APP:
 						print d[l2[0]].split("_")
 						arg = self.ParamFromText(d[l2[0]].split("_")[1])
 						self.StartNN(arg, iter)
+						k =[10/self.MaxSimpleMul]
+						k+=arg
+						k.append(10/self.MaxSimpleMul)
+						self.TextStructure[iter].set("%s"%k)
 						#self.root.title("MAin 52x52 BackProp %s"%d[l2[0]].split("_")[1])
 						self.StopProc(iter)
 						self.startedProc[iter] = []
 						self.DellFiles(path, "xml")
 						self.DellFiles(path, "upd", True)
 						self.DellFiles(path, "work")
+			self.UpdateMainProcNN(iter)
 						
 	def AddProc(self, iter, alter):
 		self.startedProc[iter] = []

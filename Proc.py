@@ -9,7 +9,7 @@ ITERATIONS = 1000000
 
 Net = None
 
-def main(arg, path, Type, iter, learningrate, update = None):
+def main(arg, path, Type, iter, learningrate, update = None, sharedmemory = None):
 	global lendata, data
 	lendata = 0
 	ITERATIONS = 10000000
@@ -102,15 +102,30 @@ def main(arg, path, Type, iter, learningrate, update = None):
 		#err= Net.TrainNet(5, 0.000001)
 		err= Net.TrainNetOnce()
 		err_count=err_count - err
+		average = SpeedLearning(err_count, i+1)
+		accuracy = check_error(data, Net)
 		if i == 0:
 			old_err = err
 		if i >1:
 			if np.abs(SpeedLearning(err_count, i+1)) <= np.abs(err):
-				msg = "%s  %s  %s  %s  %s  %s  %s  %s"%(Type, err, iter, i, count, SpeedLearning(err_count, i+1), check_error(data, Net), arg)
-				sock.send(msg)
+				if Type == "Main":
+					if sharedmemory != None:
+						sharedmemory[0] = Type
+						sharedmemory[1] = err
+						sharedmemory[2] = iter
+						sharedmemory[3] = i
+						sharedmemory[4] = count
+						sharedmemory[5] = average
+						sharedmemory[6] = accuracy
 				break
-		msg = "%s  %s  %s  %s  %s  %s  %s  %s"%(Type, err, iter, i, count, SpeedLearning(err_count, i+1), check_error(data, Net), arg)
-		sock.send(msg)
+		if sharedmemory != None:
+			sharedmemory[0] = Type
+			sharedmemory[1] = err
+			sharedmemory[2] = iter
+			sharedmemory[3] = i
+			sharedmemory[4] = count
+			sharedmemory[5] = average
+			sharedmemory[6] = accuracy
 		if i < len(l):
 				if l[i]<err:
 					count += 1
@@ -125,8 +140,14 @@ def main(arg, path, Type, iter, learningrate, update = None):
 			else: count = 0
 		if count >= count_max:
 			err = old_err
-			msg = "%s  %s  %s  %s  %s  %s  %s  %s"%(Type, err, iter, i, count, SpeedLearning(err_count, i+1), check_error(data, Net), arg)
-			sock.send(msg)
+			if sharedmemory != None:
+				sharedmemory[0] = Type
+				sharedmemory[1] = err
+				sharedmemory[2] = iter
+				sharedmemory[3] = i
+				sharedmemory[4] = count
+				sharedmemory[5] = average
+				sharedmemory[6] = accuracy
 			break
 		if i%(ITERATIONS/100) == 0:
 			ReloadData(Net, path, learningrate)
@@ -136,9 +157,14 @@ def main(arg, path, Type, iter, learningrate, update = None):
 				fnamecmp+=1
 			else: fnamecmp = 0
 			if fnamecmp>=2:
-				
-				msg = "%s  %s  %s  %s  %s  %s  %s  %s"%(Type, err, iter, i, count, SpeedLearning(err_count, i+1), check_error(data, Net), arg)
-				sock.send(msg)
+				if sharedmemory != None:
+					sharedmemory[0].value = Type
+					sharedmemory[1].value = err
+					sharedmemory[2].value = iter
+					sharedmemory[3].value = i
+					sharedmemory[4].value = count
+					sharedmemory[5].value = average
+					sharedmemory[6].value = accuracy
 				break
 			lastfname = fname
 			Net.SaveNet(path+"/"+fname)
