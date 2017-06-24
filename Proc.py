@@ -9,11 +9,12 @@ ITERATIONS = 1000000
 
 Net = None
 
-def main(arg, path, Type, iter, update = None):
+def main(arg, path, Type, iter, learningrate, update = None):
 	global lendata, data
 	lendata = 0
-	ITERATIONS = 1000000
-	print (arg)	
+	ITERATIONS = 10000000
+	#print (arg)	
+	f2 = None
 	Net = NET(arg)
 	if update == None:
 		#path = os.getcwd()
@@ -31,7 +32,9 @@ def main(arg, path, Type, iter, update = None):
 			l2 = np.sort(np.array(l2, dtype = "float64"))
 			for i in l:
 				if i.find("%s"%l2[0]) != -1:
+					#print iter, i, "FIND", "%s_%s_%s"%(arg[0],arg[1:-1] ,arg[-1])
 					if d["%s"%l2[0]] == "%s_%s_%s"%(arg[0],arg[1:-1] ,arg[-1]):
+						#print "FINDED", iter
 						f2 = i
 					break
 		dirlist = os.listdir(path)
@@ -48,7 +51,10 @@ def main(arg, path, Type, iter, update = None):
 			l2 = np.sort(np.array(l2, dtype = "float64"))
 			for i in l:
 				if i.find("%s"%l2[0]) != -1:
-					Net.UpdateWeights(path+"/"+i, path+"/"+f2)
+					if f2 == None:
+						Net.UpdateWeights(path+"/"+i)
+					else: 
+						Net.UpdateWeights(path+"/"+i, path+"/"+f2)
 					break
 	if update != None:
 		ITERATIONS = 0
@@ -73,9 +79,9 @@ def main(arg, path, Type, iter, update = None):
 				if i.find("%s"%l2[0]) != -1:
 					Net.UpdateWeights(path+"/"+i)
 					break
-	ReloadData(Net, path)
+	ReloadData(Net, path, learningrate)
 	sock = socket.socket()
-	sock.connect(("localhost", 8010))
+	sock.connect(("localhost", 50007))
 	lastfname = ""
 	old_err  = 0
 	count = 0
@@ -88,7 +94,7 @@ def main(arg, path, Type, iter, update = None):
 	for i in xrange(len(arg[1:-1])):
 		count_max += arg[i+1]
 	l = l[1:-1].split(",")
-	print ("len DMSE", len(l))
+	#print ("len DMSE", len(l))
 	if len(l)>0 and l[0].isdigit() == True:
 		for i in xrange(len(l)):
 			l[i] = np.float64(l[i])
@@ -100,18 +106,14 @@ def main(arg, path, Type, iter, update = None):
 			old_err = err
 		if i >1:
 			if np.abs(SpeedLearning(err_count, i+1)) <= np.abs(err):
-				msg = "%s %s %s %s %s %s %s %s"%(Type, err, iter, i, count, SpeedLearning(err_count, i+1), check_error(data, Net), arg)
-				try:
-					sock.send(msg)
-				except: pass
+				msg = "%s  %s  %s  %s  %s  %s  %s  %s"%(Type, err, iter, i, count, SpeedLearning(err_count, i+1), check_error(data, Net), arg)
+				sock.send(msg)
 				break
-		msg = "%s %s %s %s %s %s %s %s"%(Type, err, iter, i, count, SpeedLearning(err_count, i+1), check_error(data, Net), arg)
-		try:
-			sock.send(msg)
-		except: pass
+		msg = "%s  %s  %s  %s  %s  %s  %s  %s"%(Type, err, iter, i, count, SpeedLearning(err_count, i+1), check_error(data, Net), arg)
+		sock.send(msg)
 		if i < len(l):
 				if l[i]<err:
-					count  = count_max
+					count += 1
 		if update ==None:
 			
 			if err >= old_err:
@@ -123,23 +125,20 @@ def main(arg, path, Type, iter, update = None):
 			else: count = 0
 		if count >= count_max:
 			err = old_err
-			msg = "%s %s %s %s %s %s %s %s"%(Type, err, iter, i, count, SpeedLearning(err_count, i+1), check_error(data, Net), arg)
-			try:
-				sock.send(msg)
-			except: pass
+			msg = "%s  %s  %s  %s  %s  %s  %s  %s"%(Type, err, iter, i, count, SpeedLearning(err_count, i+1), check_error(data, Net), arg)
+			sock.send(msg)
 			break
 		if i%(ITERATIONS/100) == 0:
-			ReloadData(Net, path)
+			ReloadData(Net, path, learningrate)
 			fname = '%s  %s_%s_%s.work'%(Net.err, Net.inputsize, Net.hiden, Net.outputsize)
+			print "process %s:%s"%(iter,i/(ITERATIONS/100))
 			if fname == lastfname:
 				fnamecmp+=1
 			else: fnamecmp = 0
 			if fnamecmp>=2:
 				
-				msg = "%s %s %s %s %s %s %s %s"%(Type, err, iter, i, count, SpeedLearning(err_count, i+1), check_error(data, Net), arg)
-				try:
-					sock.send(msg)
-				except: pass
+				msg = "%s  %s  %s  %s  %s  %s  %s  %s"%(Type, err, iter, i, count, SpeedLearning(err_count, i+1), check_error(data, Net), arg)
+				sock.send(msg)
 				break
 			lastfname = fname
 			Net.SaveNet(path+"/"+fname)
@@ -149,8 +148,8 @@ def main(arg, path, Type, iter, update = None):
 		Net.SaveNet(path+"/"+fname)
 	else:
 		Net.SaveNet(path+'/%s  %s_%s_%s.xml'%(Net.err, Net.inputsize, Net.hiden, Net.outputsize))
-	print ("end %s        %s"%(arg, err))
-	sock.close()
+	print ("end %s        %s    %s"%(arg, err, iter))
+	#sock.close()
 	sys.exit()
 
 def ReloadData(Net, path):

@@ -33,8 +33,8 @@ class APP:
 		for i in xrange(self.MaxSimpleMul) :
 			self.startedProc[i] = []
 		self.socket = socket.socket()
-		self.socket.bind(("", 8010))
-		self.socket.listen(self.MaxSimpleMul)
+		self.socket.bind(("", 8011))
+		self.socket.listen(100)#(self.MaxSimpleMul)
 		self.Exit = False
 		#self.learningrate = 0.1
 		self.threads = [0]*self.MaxSimpleMul
@@ -52,6 +52,9 @@ class APP:
 		for i in xrange(self.MaxSimpleMul):
 			if os.path.isdir(os.getcwd()+"/%s"%i) == False:
 				os.mkdir(os.getcwd()+"/%s"%i)
+				fw = open(os.getcwd()+"/%s/dMSE.err"%i, "w")
+				fw.write("%s"%[1])
+				fw.close()
 		out = read_file_data_troika("data.txt")
 		res = [0 for i in xrange(len(out)/3)]
 		j=0
@@ -85,7 +88,7 @@ class APP:
 			Label(self.SummuryInfo, textvariable = self.TextIterations[j]).grid(row=j+1, column=1)
 			Label(self.SummuryInfo, textvariable = self.TextError[j]).grid(row=j+1, column=2)
 			Label(self.SummuryInfo, textvariable = self.TextMean[j]).grid(row=j+1, column=3)
-		self.SummuryInfo.grid()
+		self.SummuryInfo.grid(sticky=N+S+E+W)
 		
 			
 		
@@ -162,16 +165,18 @@ class APP:
 	def UpdateMainProcNN(self):
 		while self.Exit == False:
 			self.conn, _ = self.socket.accept()
+			time.sleep(10)
 			msg = self.conn.recv(1024)
-			print msg
-			m = msg.split(" ")
+			if msg != "":
+				print msg
+			m = msg.split("  ")
 			if m[0] == 'main':
-				self.TextStructure[int(m[2])].set("%s"%m[7:])
+				self.TextStructure[int(m[2])].set("%s"%m[7])
 				self.TextIterations[int(m[2])].set("%s"%m[3])
 				self.TextError[int(m[2])].set("%s"%m[1])
 				self.TextMean[int(m[2])].set("%s"%m[5])
-			self.root.update()
-			self.conn.close()
+			#self.root.update()
+		self.conn.close()
 		
 
 	#def MainLoop(self):
@@ -181,9 +186,9 @@ class APP:
 		dirlist = os.listdir(path)
 		l = []
 		for i in dirlist:
-			if os.path.isfile(i):
-				if i[-len(fend):] == fend:
-					l.append(os.path.basename(i))
+			#if os.path.isfile(i):
+			if i[-len(fend):] == fend:
+				l.append(os.path.basename(i))
 		l1=[]
 		for i in xrange(len(l)):
 			l1.append(l[i][:-(len(fend)+1)].split("  "))
@@ -194,9 +199,12 @@ class APP:
 		l2 = np.sort(np.array(l2,dtype = "float"))
 		for i in l:
 			if all == True:
-				os.remove(i)
+				os.remove(path+"/"+i)
 			elif i.find("%s"%l2[0]) == -1:
-				os.remove(i)
+				try:
+					os.remove(path+"/"+i)
+				except: 
+					print path, i, "CAN'T REMOVE"
 				
 	def Twork(self, iter, path):
 		#path = os.getcwd()
@@ -210,7 +218,7 @@ class APP:
 					for i in dirlist:
 						if i[-4:]== ".xml":							
 							l.append(os.path.basename(i))
-					print iter, l, "L"
+					#print iter, l, "L"
 					l1=[]
 					for i in xrange(len(l)):
 						l1.append(l[i][:-4].split("  "))
@@ -219,7 +227,7 @@ class APP:
 					d = dict(l1[:])
 					l2 = d.keys()
 					l2 = np.sort(np.array(l2,dtype = "float64"))
-					print l2
+					#print l2
 					if l2[0]<0.000000000000001:
 						self.Exit = True
 						break
@@ -227,15 +235,17 @@ class APP:
 					fw.write("%s"%self.dMSE[iter][:-1])
 					fw.close()
 					self.dMSE[iter] = []
-					param = self.ParamFromText(d[l2[0]])
-					alter = self.Alternate(param[2])
+					self.learningrate[iter] = float("{0:.9f}".format(float(l2[0])/10))
+					param = self.ParamFromText(d[l2[0]].split("_")[1])
+					alter = self.Alternate(param)
 					self.AddProc(iter, alter[:])
 				p = 0
 				if self.startedProc[iter] != []:
 					for i in self.startedProc[iter]:
 						if i.is_alive() == True:
 							p+=1
-					if p == 0:
+					if p == 0 and self.Mainproc[iter].is_alive() == False:
+						#print "YES"
 						dirlist = os.listdir(path)
 						l = []
 						for i in dirlist:
@@ -249,17 +259,15 @@ class APP:
 						d = dict(l1[:])
 						l2 = d.keys()
 						l2 = np.sort(np.array(l2,dtype = "float64"))
-						
-						self.StartNN(d[l2[0]].split("_")[1])
-						self.root.title("MAin 52x52 BackProp %s"%d[l2[0]].split("_")[1])
+						arg = self.ParamFromText(d[l2[0]].split("_")[1])
+						self.StartNN(arg, iter)
+						#self.root.title("MAin 52x52 BackProp %s"%d[l2[0]].split("_")[1])
+						self.StopProc(iter)
 						self.startedProc[iter] = []
 						self.DellFiles(path, "xml")
 						self.DellFiles(path, "upd", True)
 						self.DellFiles(path, "work")
-			#self.UpdateButtons()
-			#self.root.update()
-			#self.UpdateMainProcNN(iter)
-
+						
 	def AddProc(self, iter, alter):
 		self.startedProc[iter] = []
 		for i in xrange(len(alter)):
@@ -267,27 +275,20 @@ class APP:
 			arg+=[10/self.MaxSimpleMul]																														#############
 			arg+=alter[i]
 			arg+=[10/self.MaxSimpleMul]																														#############
-			self.startedProc[iter].append(Process(target=Proc.main, args=(arg, os.getcwd()+"/%s"%iter, i, iter, i)))
+			self.startedProc[iter].append(Process(target=Proc.main, args=(arg, os.getcwd()+"/%s"%iter, i, iter, self.learningrate[iter], i)))
 		for i in  self.startedProc[iter]:
-			print iter, i
+			#print iter, i
 			i.start()
 		
 	def ParamFromText(self, s):
-		s1 = s.split("_")
 		s2 = []
-		print (s1, "ParamFromText")
-		s2.append(int(s1[0]))
-		s2.append(int(s1[2]))
-			#else: s2.append(s1[i])
-		s3 = s1[1].strip("[").strip("]")
-		if s3.find(",") == -1:
-			s2.append([int(s3)])
+		if s.find(",") == -1:
+			s2.append(int(s[1:-1]))
 		else:
-			s4 = s3.split(",")
-			s5 = []
+			s1 = s[1:-1]
+			s4 = s1.split(",")
 			for i in s4:
-				s5.append(int(i))
-			s2.append(s5)
+				s2.append(int(i))
 		return s2[:]
 
 	def Alternate(self, m):
@@ -298,7 +299,7 @@ class APP:
 			m[i]= m[i]-1
 		m.append(1)
 		r.append(m)
-		
+		#print r
 		return r
 		
 	def CommandStopProc(self, event):

@@ -87,7 +87,7 @@ class NET():
 		self.ds = SupervisedDataSet(self.inputsize, self.outputsize)
 		for i in xrange(len(dataoutput)):
 			self.ds.appendLinked(datainput[i], dataoutput[i])
-		self.trainer = RPropMinusTrainer(self.net, dataset = self.ds, learningrate = 0.1)
+		self.trainer = BackpropTrainer(self.net, dataset = self.ds, learningrate = 0.1)
 		return 0
 	
  
@@ -169,14 +169,18 @@ class NET():
 		if f2 != None:
 			for i in d2:
 				for j in d2[i]:
-					b = d3[i][j][:]
-					b[:d2[i][j].size] = d2[i][j][:]
-					d3[i].update({j:b})
+					try:
+						b = d3[i][j][:]
+						b[:d2[i][j].size] = d2[i][j][:]
+						d3[i].update({j:b})
+					except: pass
 		for i in d1:
 			for j in d1[i]:
-				b = d3[i][j][:]
-				b[:d1[i][j].size] = d1[i][j][:]
-				d3[i].update({j:b})
+				try:
+					b = d3[i][j][:]
+					b[:d1[i][j].size] = d1[i][j][:]
+					d3[i].update({j:b})
+				except: pass
 		for i in d3["Input"]:
 			params = np.hstack((params,d3["Input"][i]))
 		for i in xrange(len(self.hiden)):

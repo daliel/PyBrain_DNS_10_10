@@ -6,7 +6,7 @@ def MaxSimpleMul(x):
 	if type(x) == list:
 		lx = len(x)
 	else: lx = x
-	for i in range(len (y)-1, -1, -1):
+	for i in range(len (y)):
 		if lx >y[i]:
 			if lx%y[i] == 0:
 				return y[i]
